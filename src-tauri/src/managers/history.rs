@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::audio_toolkit::save_wav_file;
+use crate::settings::resolve_history_db_path;
 
 /// Database migrations for transcription history.
 /// Each migration is applied in order. The library tracks which migrations
@@ -52,8 +53,7 @@ pub struct HistoryManager {
 
 impl HistoryManager {
     pub fn new(app_handle: &AppHandle) -> Result<Self> {
-        let app_data_dir = app_handle.path().app_data_dir()?;
-        let db_path = app_data_dir.join("history.db");
+        let db_path = resolve_history_db_path(app_handle).map_err(|e| anyhow::anyhow!(e))?;
 
         let manager = Self {
             app_handle: app_handle.clone(),

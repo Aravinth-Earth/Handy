@@ -364,6 +364,10 @@ pub struct AppSettings {
     pub recordings_custom_dir: Option<String>,
     #[serde(default)]
     pub models_custom_dir: Option<String>,
+    #[serde(default)]
+    pub personal_data_custom_dir: Option<String>,
+    #[serde(default)]
+    pub logs_custom_dir: Option<String>,
 }
 
 fn default_model() -> String {
@@ -730,30 +734,44 @@ pub fn get_default_settings() -> AppSettings {
         external_script_path: None,
         recordings_custom_dir: None,
         models_custom_dir: None,
+        personal_data_custom_dir: None,
+        logs_custom_dir: None,
     }
 }
 
 /// Resolve the effective recordings directory.
-/// Returns the custom path when one is set in settings; otherwise falls back to
-/// `<app_data_dir>/recordings`. Creates the directory if it does not exist.
+/// Returns the custom path when one is set in settings; otherwise uses
+/// `<personal_data_dir>/recordings`. Creates the directory if it does not exist.
+/// Note: If personal_data_custom_dir is set (custom location), recordings go there.
+/// If using default (app_data_dir), recordings go to app_data_dir/recordings for backward compat.
 pub fn resolve_recordings_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     let settings = get_settings(app);
-    let dir = if let Some(custom) = settings.recordings_custom_dir {
+    let recordings_dir = if let Some(custom) = settings.recordings_custom_dir {
         std::path::PathBuf::from(custom)
     } else {
+        let personal_data_dir = resolve_personal_data_dir(app)?;
+        // If personal_data is at app_data_dir level (default), use recordings subfolder
+        // Otherwise, recordings go directly in personal_data_dir
         let app_data_dir = app
             .path()
             .app_data_dir()
             .map_err(|e| format!("Failed to get app data directory: {}", e))?;
-        app_data_dir.join("recordings")
+
+        if personal_data_dir == app_data_dir {
+            // Backward compat: recordings in app_data_dir/recordings
+            personal_data_dir.join("recordings")
+        } else {
+            // Custom location: recordings go in personal_data_dir
+            personal_data_dir
+        }
     };
 
-    if !dir.exists() {
-        std::fs::create_dir_all(&dir)
+    if !recordings_dir.exists() {
+        std::fs::create_dir_all(&recordings_dir)
             .map_err(|e| format!("Failed to create recordings directory: {}", e))?;
     }
 
-    Ok(dir)
+    Ok(recordings_dir)
 }
 
 /// Resolve the effective models directory.
@@ -777,6 +795,74 @@ pub fn resolve_models_dir(app: &AppHandle) -> Result<std::path::PathBuf, String>
     }
 
     Ok(dir)
+}
+
+/// Resolve the effective personal data directory.
+/// Returns the custom path when one is set in settings; otherwise falls back to
+/// `<app_data_dir>` (which contains recordings + history.db for backward compatibility).
+/// Creates the directory if it does not exist.
+pub fn resolve_personal_data_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let settings = get_settings(app);
+    let dir = if let Some(custom) = settings.personal_data_custom_dir {
+        std::path::PathBuf::from(custom)
+    } else {
+        let app_data_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        // Default to app_data_dir itself for backward compatibility
+        app_data_dir
+    };
+
+    if !dir.exists() {
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("Failed to create personal data directory: {}", e))?;
+    }
+
+    Ok(dir)
+}
+
+/// Resolve the history database path.
+/// If using default personal_data_dir (app_data_dir), history.db stays at app_data_dir/history.db
+/// Otherwise, goes to personal_data_dir/history.db.
+pub fn resolve_history_db_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let personal_data_dir = resolve_personal_data_dir(app)?;
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+
+    // Backward compat: if using default location, keep history.db at root
+    if personal_data_dir == app_data_dir {
+        Ok(app_data_dir.join("history.db"))
+    } else {
+        Ok(personal_data_dir.join("history.db"))
+    }
+}
+
+/// Resolve the effective logs directory.
+/// Returns the custom path when one is set in settings; otherwise falls back to
+/// `<app_log_dir>` for backward compatibility.
+/// Note: Logs location can only be changed by setting logs_custom_dir in settings.
+/// For new users, logs will go to app_data_dir/logs if they configure it.
+pub fn resolve_logs_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let settings = get_settings(app);
+    if let Some(custom) = settings.logs_custom_dir {
+        let dir = std::path::PathBuf::from(custom);
+        if !dir.exists() {
+            std::fs::create_dir_all(&dir)
+                .map_err(|e| format!("Failed to create logs directory: {}", e))?;
+        }
+        return Ok(dir);
+    }
+
+    // Default: use platform standard log directory for backward compatibility
+    let log_dir = app
+        .path()
+        .app_log_dir()
+        .map_err(|e| format!("Failed to get log directory: {}", e))?;
+
+    Ok(log_dir)
 }
 
 impl AppSettings {

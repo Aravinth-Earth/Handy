@@ -40,11 +40,7 @@ pub fn get_default_settings() -> Result<AppSettings, String> {
 #[tauri::command]
 #[specta::specta]
 pub fn get_log_dir_path(app: AppHandle) -> Result<String, String> {
-    let log_dir = app
-        .path()
-        .app_log_dir()
-        .map_err(|e| format!("Failed to get log directory: {}", e))?;
-
+    let log_dir = crate::settings::resolve_logs_dir(&app)?;
     Ok(log_dir.to_string_lossy().to_string())
 }
 
@@ -81,12 +77,8 @@ pub fn open_recordings_folder(app: AppHandle) -> Result<(), String> {
 #[specta::specta]
 #[tauri::command]
 pub fn open_log_dir(app: AppHandle) -> Result<(), String> {
-    let log_dir = app
-        .path()
-        .app_log_dir()
-        .map_err(|e| format!("Failed to get log directory: {}", e))?;
-
-    let path = log_dir.to_string_lossy().as_ref().to_string();
+    let log_dir = crate::settings::resolve_logs_dir(&app)?;
+    let path = log_dir.to_string_lossy().to_string();
     app.opener()
         .open_path(path, None::<String>)
         .map_err(|e| format!("Failed to open log directory: {}", e))?;
@@ -127,6 +119,115 @@ pub fn open_models_folder(app: AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to open models folder: {}", e))?;
 
     Ok(())
+}
+
+#[specta::specta]
+#[tauri::command]
+pub fn get_personal_data_dir_path(app: AppHandle) -> Result<String, String> {
+    let personal_data_dir = crate::settings::resolve_personal_data_dir(&app)?;
+    Ok(personal_data_dir.to_string_lossy().to_string())
+}
+
+#[specta::specta]
+#[tauri::command]
+pub fn open_personal_data_dir(app: AppHandle) -> Result<(), String> {
+    let personal_data_dir = crate::settings::resolve_personal_data_dir(&app)?;
+    let path = personal_data_dir.to_string_lossy().into_owned();
+    app.opener()
+        .open_path(path, None::<String>)
+        .map_err(|e| format!("Failed to open personal data folder: {}", e))?;
+
+    Ok(())
+}
+
+fn move_files_between_dirs(
+    old_dir: &std::path::Path,
+    new_dir: &std::path::Path,
+) -> Result<SetModelsDirResult, String> {
+    let mut result = SetModelsDirResult {
+        moved: 0,
+        skipped: 0,
+        failed: 0,
+    };
+
+    if !old_dir.exists() {
+        return Ok(result);
+    }
+
+    let entries =
+        std::fs::read_dir(old_dir).map_err(|e| format!("Failed to read directory: {}", e))?;
+
+    for entry in entries.flatten() {
+        let file_name = entry.file_name();
+        let source = old_dir.join(&file_name);
+        let target = new_dir.join(&file_name);
+
+        if target.exists() {
+            result.skipped += 1;
+            continue;
+        }
+
+        let move_result = std::fs::rename(&source, &target);
+
+        match move_result {
+            Ok(_) => result.moved += 1,
+            Err(_) => result.failed += 1,
+        }
+    }
+
+    Ok(result)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_personal_data_directory(
+    app: AppHandle,
+    path: Option<String>,
+    move_existing: bool,
+) -> Result<SetModelsDirResult, String> {
+    let old_dir = crate::settings::resolve_personal_data_dir(&app)?;
+
+    let new_dir: std::path::PathBuf = if let Some(ref p) = path {
+        if p.trim().is_empty() {
+            return Err("Personal data directory path must not be empty.".to_string());
+        }
+
+        let candidate = std::path::PathBuf::from(p);
+
+        std::fs::create_dir_all(&candidate)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+
+        let test = candidate.join(".handy_write_test");
+        std::fs::write(&test, b"").map_err(|e| format!("Directory is not writable: {}", e))?;
+        std::fs::remove_file(&test).ok();
+
+        candidate
+    } else {
+        let app_data_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        let default_dir = app_data_dir.join("personal_data");
+        std::fs::create_dir_all(&default_dir)
+            .map_err(|e| format!("Failed to create default personal data directory: {}", e))?;
+        default_dir
+    };
+
+    let mut settings = crate::settings::get_settings(&app);
+    settings.personal_data_custom_dir = path.clone();
+    crate::settings::write_settings(&app, settings);
+
+    let mut result = SetModelsDirResult {
+        moved: 0,
+        skipped: 0,
+        failed: 0,
+    };
+
+    if move_existing && old_dir != new_dir && old_dir.exists() {
+        result = move_files_between_dirs(&old_dir, &new_dir)?;
+    }
+
+    Ok(result)
 }
 
 #[derive(serde::Serialize, serde::Deserialize, specta::Type, Debug)]

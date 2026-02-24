@@ -431,6 +431,19 @@
         "moveResult_failed": "{{count}} file(s) could not be moved.",
         "errorSetDir": "Failed to set recordings directory: {{error}}"
       },
+      "personalDataDirectory": {
+        "title": "Personal Data Directory",
+        "description": "Choose where recordings and history database are stored. When disabled, stored in the app data folder.",
+        "defaultPath": "Default (app data folder)",
+        "chooseFolder": "Choose Folder",
+        "confirmDisableTitle": "Revert to Default Directory?",
+        "confirmDisableMessage": "Personal data will be moved back to the default app data folder.",
+        "confirmDisableButton": "Revert",
+        "moveResult_moved": "Moved {{count}} item(s) to new directory.",
+        "moveResult_skipped": "{{count}} item(s) skipped (already exist at destination).",
+        "moveResult_failed": "{{count}} item(s) could not be moved.",
+        "errorSetDir": "Failed to set personal data directory: {{error}}"
+      },
       "modelsDirectory": {
         "title": "Models Directory",
         "description": "Choose where AI models are stored. When disabled, models are stored in the app data folder.",
@@ -494,8 +507,8 @@
         "description": "Current version of Handy"
       },
       "appDataDirectory": {
-        "title": "App Data Directory",
-        "description": "Location where Handy stores its data"
+        "title": "Internal App Data",
+        "description": "Contains app settings and logs. Just open to view."
       },
       "sourceCode": {
         "title": "Source Code",

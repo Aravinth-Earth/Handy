@@ -7,8 +7,7 @@ import { SettingContainer } from "../../ui/SettingContainer";
 import { Button } from "../../ui/Button";
 import { AppDataDirectory } from "../AppDataDirectory";
 import { AppLanguageSelector } from "../AppLanguageSelector";
-import { LogDirectory } from "../debug";
-import { RecordingsDirectory } from "../RecordingsDirectory";
+import { PersonalDataDirectory } from "../PersonalDataDirectory";
 import { ModelsDirectory } from "../ModelsDirectory";
 
 export const AboutSettings: React.FC = () => {
@@ -75,8 +74,7 @@ export const AboutSettings: React.FC = () => {
         </SettingContainer>
 
         <AppDataDirectory descriptionMode="tooltip" grouped={true} />
-        <LogDirectory grouped={true} />
-        <RecordingsDirectory descriptionMode="tooltip" grouped={true} />
+        <PersonalDataDirectory descriptionMode="tooltip" grouped={true} />
         <ModelsDirectory descriptionMode="tooltip" grouped={true} />
       </SettingsGroup>
 
